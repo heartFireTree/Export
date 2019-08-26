@@ -3,6 +3,7 @@ using NPOI.SS.UserModel;
 using NPOI.HPSF;
 using NPOI.SS.Util;
 using NPOI.XSSF.UserModel;
+using Aspose.Cells;
 
 namespace ExcelHelp
 {
@@ -10,6 +11,14 @@ namespace ExcelHelp
     {
        public static string CompanyName = "自定义";
          
+          /// <summary>
+          ///  导出excel
+          /// </summary>
+          /// <param name="dtSource">table数据</param>
+          /// <param name="strHeaderText">标题</param>
+          /// <param name="strFileName">文件名</param>
+          /// <param name="IsDoubleHead">是否双表头</param>
+          /// <param name="heads">表头信息</param>
           public static void ExportByWeb(List<DataTable> dtSource, List<string> strHeaderText, List<string> heads, string strFileName)
           {
               HttpContext curContext = HttpContext.Current;
@@ -39,6 +48,167 @@ namespace ExcelHelp
 
               curContext.Response.End();
           }
+        
+         public static void ExportByWeb(List<DataTable> dtSource, List<string> strHeaderText, List<string> heads, List<string> pageNames, string strFileName)
+         {
+            HttpContext curContext = HttpContext.Current;
+            string fileName = strFileName;
+            //处理乱码兼容性
+            if (curContext.Request.UserAgent.ToLower().IndexOf("firefox") > -1)
+            {
+
+            }
+            else
+            {
+                fileName = HttpUtility.UrlEncode(strFileName, System.Text.Encoding.UTF8);
+            }
+            // 设置编码和附件格式  
+            curContext.Response.ContentType = "application/vnd.ms-excel";
+            curContext.Response.ContentEncoding = Encoding.UTF8;
+            curContext.Response.Charset = "";
+            curContext.Response.AppendHeader("Content-Disposition",
+                "attachment;filename=" + fileName);
+            if (dtSource == null && dtSource.Count == 0)
+            {
+                return;
+            }
+            curContext.Response.BinaryWrite(ExportByAspose(dtSource, strHeaderText, heads, pageNames).GetBuffer());
+            curContext.Response.End();
+         }
+        
+        /// <summary>
+        /// Aspose批量Sheet导出
+        /// </summary>
+        /// <param name="dtSource">多个sheet</param>
+        /// <param name="HeadTitle">标题</param>
+        /// <param name="HeadTitletow">二标题</param>
+        /// <param name="pageName">每个sheet名称</param>
+        /// <returns></returns>
+        public static MemoryStream ExportByAspose(List<DataTable> dtSource, List<string> HeadTitle, List<string> HeadTitletow, List<string> pageName)
+        {
+            Workbook workbook = new Aspose.Cells.Workbook();
+            //清除页先 要不然 新建就有一个sheet
+            workbook.Worksheets.Clear();
+            #region 样式
+            //标题样式
+            Style styleTitle = workbook.Styles[workbook.Styles.Add()];
+            styleTitle.HorizontalAlignment = TextAlignmentType.Center;
+            styleTitle.Font.Name = "宋体";
+            styleTitle.Font.Size = 18;
+            styleTitle.Font.IsBold = true;
+
+            //样式2
+            Style style2 = workbook.Styles[workbook.Styles.Add()];
+            style2.HorizontalAlignment = TextAlignmentType.Right;
+            style2.Font.IsBold = false;
+            style2.IsTextWrapped = true;
+
+            //列样式
+            Style styleColumn = workbook.Styles[workbook.Styles.Add()];
+            styleColumn.HorizontalAlignment = TextAlignmentType.Left;
+            styleColumn.VerticalAlignment = TextAlignmentType.Center;
+            styleColumn.Font.IsBold = true;
+            styleColumn.Font.IsNormalizeHeights = true;
+            #endregion
+
+            for (int i = 0; i < dtSource.Count; i++)
+            {
+                string sheetName = pageName[i].Trim();
+                sheetName = sheetName.Length > 31 ? sheetName.Substring(0,31) : sheetName;
+                //创建sheet(excel限制最大长度为31)
+
+                workbook.Worksheets.Add(sheetName);
+                //获取当前sheet
+                Worksheet sheet = workbook.Worksheets[i];
+                Cells cells = sheet.Cells;
+
+                int rowIndex = 0;
+                if (dtSource[i] != null)
+                {
+                    //标题行
+                    int colNum = dtSource[i].Columns.Count;//表格列数
+                    int rowNum = dtSource[i].Rows.Count;//表格行数
+                    cells.Merge(0, 0, 1, colNum);//合并单元格//生成行1 标题行 
+                    cells[0, 0].PutValue(HeadTitle[i].ToString().Trim());//填写标题内容
+                    cells[0, 0].SetStyle(styleTitle);//标题样式
+                    cells.SetRowHeight(0, 30);//设置行高
+
+                    //标题第二行
+                    cells.Merge(1, 0, 1, colNum);//合并单元格
+                    cells[1,0].PutValue(HeadTitletow[i] + "| 导出时间:" + DateTime.Now.ToString("yyyy-MM-dd HH:mm"));
+                    cells[1, 0].SetStyle(style2);
+                    cells.SetRowHeight(1, 18);
+
+                    //列名行
+                    for (int ct = 0; ct < colNum; ct++)
+                    {
+                        cells[2, ct].PutValue(dtSource[i].Columns[ct].ColumnName);
+                        cells[2, ct].SetStyle(styleColumn);
+                    }
+                    cells.SetRowHeight(2, 18);
+
+                    rowIndex = 3;
+                    //生成数据行
+                    for (int r = 0; r < rowNum; r++)
+                    {
+                        //数据列遍历
+                        for (int c = 0; c < colNum; c++)
+                        {
+                            string drValue = dtSource[i].Rows[r][c].ToString();
+
+                            double doubV = 0;
+
+                            //设置单元格数据根据值类型转换
+                            if (double.TryParse(drValue,out doubV))
+                            {
+                                cells[rowIndex, c].PutValue(doubV);
+                            }
+                            else
+                            {
+                                cells[rowIndex, c].PutValue(drValue);
+                            }
+                        }
+                        cells.SetRowHeight(rowIndex, 18);
+                        rowIndex++;
+                    }
+                }
+                //sheet.AutoFitColumns();//自动填充列宽(不完美)
+                setColumnWithAuto(sheet);
+            }
+
+            MemoryStream ms = workbook.SaveToStream();
+            return ms;
+        }
+
+        /// <summary>          
+        /// Aspose设置表页的列宽度自适应          
+        /// </summary>         
+        /// /// <param name="sheet">worksheet对象</param>       
+        public static void setColumnWithAuto(Worksheet sheet)
+        {
+            Cells cells = sheet.Cells;
+            //获取表页的最大列数    
+            int columnCount = cells.MaxColumn + 1;
+            //获取表页的最大行数   
+            int rowCount = cells.MaxRow;
+                              
+            for (int col = 0; col < columnCount; col++)
+            {
+                sheet.AutoFitColumn(col, 0, rowCount);
+            }
+            for (int col = 0; col < columnCount; col++)
+            {
+                int pixel = cells.GetColumnWidthPixel(col) + 30;
+                if (pixel > 255)
+                {
+                    cells.SetColumnWidthPixel(col, 255);
+                }
+                else
+                {
+                    cells.SetColumnWidthPixel(col, pixel);
+                }
+            }
+        }
           
           public static MemoryStream Export(DataTable dtSource, string strHeaderText, string hidText, string FileName = null)
           {
