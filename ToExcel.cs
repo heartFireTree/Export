@@ -17,22 +17,16 @@ namespace ExcelHelp
           /// <param name="dtSource">table数据</param>
           /// <param name="strHeaderText">标题</param>
           /// <param name="strFileName">文件名</param>
-          /// <param name="IsDoubleHead">是否双表头</param>
           /// <param name="heads">表头信息</param>
           public static void ExportByWeb(List<DataTable> dtSource, List<string> strHeaderText, List<string> heads, string strFileName)
           {
               HttpContext curContext = HttpContext.Current;
               string fileName = strFileName;
               //处理乱码兼容性
-              if (curContext.Request.UserAgent.ToLower().IndexOf("firefox") > -1)
+              if (curContext.Request.UserAgent.ToLower().IndexOf("firefox") <= -1)
               {
-
+                     fileName = HttpUtility.UrlEncode(strFileName, System.Text.Encoding.UTF8);
               }
-              else
-              {
-                  fileName = HttpUtility.UrlEncode(strFileName, System.Text.Encoding.UTF8);
-              }
-
 
               // 设置编码和附件格式  
               curContext.Response.ContentType = "application/vnd.ms-excel";
